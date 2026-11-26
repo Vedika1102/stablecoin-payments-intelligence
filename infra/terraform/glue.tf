@@ -104,7 +104,7 @@ resource "aws_glue_crawler" "lake" {
     delete_behavior = "LOG"
   }
   recrawl_policy {
-    recrawl_behavior = "CRAWL_NEW_FOLDERS_ONLY"
+    recrawl_behavior = "CRAWL_EVERYTHING" # required for UPDATE_IN_DATABASE schema changes
   }
 }
 
@@ -157,8 +157,6 @@ resource "aws_glue_data_quality_ruleset" "silver_transfers" {
   name        = "${local.prefix}-silver-transfers"
   description = "Silver stablecoin transfers: completeness, uniqueness, validity"
   ruleset     = file("${path.module}/../../aws/glue/dq_rules_silver.dqdl")
-  target_table {
-    database_name = aws_glue_catalog_database.lake.name
-    table_name    = "stablecoin_transfers"
-  }
+  # No target_table: the catalog table only exists after the first crawl. The evaluation run
+  # (Airflow GlueDataQualityRuleSetEvaluationRunOperator) names the table it checks.
 }
