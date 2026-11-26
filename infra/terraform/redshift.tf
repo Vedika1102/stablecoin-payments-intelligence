@@ -55,6 +55,11 @@ resource "aws_redshiftserverless_workgroup" "this" {
     parameter_key   = "max_query_execution_time"
     parameter_value = "3600"
   }
+  lifecycle {
+    # The API echoes back every default parameter (auto_mv, datestyle, ...), which the provider
+    # reports as a diff on each plan and then fails to "update". Ours are set at creation.
+    ignore_changes = [config_parameter]
+  }
 }
 
 # Cost guardrail: cap monthly RPU-hours
