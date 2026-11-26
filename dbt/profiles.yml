@@ -21,4 +21,3 @@ stablecoin_payments:
       password: "{{ env_var('REDSHIFT_PASSWORD', '') }}"
       threads: 4
       sslmode: require
-      connect_timeout: 30

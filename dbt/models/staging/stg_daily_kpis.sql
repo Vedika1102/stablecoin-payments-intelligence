@@ -5,7 +5,7 @@ select
     transfer_kind,
     flow_type,
     cast(transfers as bigint)         as transfers,
-    cast(volume_usd as double)        as volume_usd,
+    cast(volume_usd as {{ dbt.type_float() }})        as volume_usd,
     cast(senders_approx as bigint)    as senders_approx,
     cast(receivers_approx as bigint)  as receivers_approx,
     avg_base_fee_gwei,
