@@ -41,3 +41,9 @@ variable "athena_bytes_scanned_cutoff" {
   type        = number
   default     = 214748364800
 }
+
+variable "enable_redshift" {
+  description = "Create Redshift Serverless and the load step. Off by default: the AWS free account plan does not include Redshift."
+  type        = bool
+  default     = false
+}

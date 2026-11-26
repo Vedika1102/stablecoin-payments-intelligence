@@ -1,4 +1,6 @@
+# Redshift is not available on the AWS free account plan, so it is opt-in (var.enable_redshift).
 resource "aws_redshiftserverless_namespace" "this" {
+  count                 = var.enable_redshift ? 1 : 0
   namespace_name        = local.prefix
   db_name               = "analytics"
   admin_username        = "admin"
@@ -9,7 +11,8 @@ resource "aws_redshiftserverless_namespace" "this" {
 }
 
 resource "aws_redshiftserverless_workgroup" "this" {
-  namespace_name      = aws_redshiftserverless_namespace.this.namespace_name
+  count               = var.enable_redshift ? 1 : 0
+  namespace_name      = aws_redshiftserverless_namespace.this[0].namespace_name
   workgroup_name      = local.prefix
   base_capacity       = var.redshift_base_rpu
   publicly_accessible = false
@@ -25,7 +28,8 @@ resource "aws_redshiftserverless_workgroup" "this" {
 
 # Cost guardrail: cap monthly RPU-hours
 resource "aws_redshiftserverless_usage_limit" "rpu" {
-  resource_arn  = aws_redshiftserverless_workgroup.this.arn
+  count         = var.enable_redshift ? 1 : 0
+  resource_arn  = aws_redshiftserverless_workgroup.this[0].arn
   usage_type    = "serverless-compute"
   amount        = 200
   period        = "monthly"

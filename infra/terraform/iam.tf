@@ -101,9 +101,12 @@ data "aws_iam_policy_document" "sfn" {
     actions   = ["redshift-data:ExecuteStatement", "redshift-data:DescribeStatement", "redshift-data:GetStatementResult"]
     resources = ["*"]
   }
-  statement {
-    actions   = ["redshift-serverless:GetCredentials"]
-    resources = [aws_redshiftserverless_workgroup.this.arn]
+  dynamic "statement" {
+    for_each = aws_redshiftserverless_workgroup.this
+    content {
+      actions   = ["redshift-serverless:GetCredentials"]
+      resources = [statement.value.arn]
+    }
   }
   statement {
     actions   = ["sns:Publish"]

@@ -10,8 +10,9 @@ resource "aws_sfn_state_machine" "daily" {
     ingest_job   = aws_glue_job.pipeline["ingest_bronze"].name
     silver_job   = aws_glue_job.pipeline["build_silver"].name
     gold_job     = aws_glue_job.pipeline["build_gold"].name
-    workgroup    = aws_redshiftserverless_workgroup.this.workgroup_name
-    database     = aws_redshiftserverless_namespace.this.db_name
+    workgroup    = var.enable_redshift ? aws_redshiftserverless_workgroup.this[0].workgroup_name : "disabled"
+    database     = var.enable_redshift ? aws_redshiftserverless_namespace.this[0].db_name : "disabled"
+    after_gold   = var.enable_redshift ? "LoadRedshift" : "Succeeded"
     alerts_topic = aws_sns_topic.alerts.arn
   })
   logging_configuration {

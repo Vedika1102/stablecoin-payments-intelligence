@@ -46,7 +46,7 @@
       "Parameters": { "JobName": "${gold_job}" },
       "ResultPath": null,
       "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.error", "Next": "NotifyFailure" }],
-      "Next": "LoadRedshift"
+      "Next": "${after_gold}"
     },
     "LoadRedshift": {
       "Type": "Task",
