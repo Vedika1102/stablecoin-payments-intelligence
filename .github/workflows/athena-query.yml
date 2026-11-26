@@ -1,0 +1,51 @@
+name: athena-query
+
+# Run read-only SQL against the lake through the Athena workgroup (scan cutoff applies) and print the
+# results in the job log. Separate statements with ';'. Handy for checks without opening the console.
+on:
+  workflow_dispatch:
+    inputs:
+      sql: { description: "SQL (statements separated by ;)", required: true }
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  query:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      WORKGROUP: stablecoin-payments-dev-analysts
+      DATABASE: stablecoin_payments_dev_lake
+      SQL: ${{ inputs.sql }}
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: us-east-2
+      - name: Run statements
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, subprocess, time
+          def aws(*a):
+              return json.loads(subprocess.check_output(["aws", *a, "--output", "json"]))
+          for stmt in [s.strip() for s in os.environ["SQL"].split(";") if s.strip()]:
+              qid = aws("athena", "start-query-execution", "--work-group", os.environ["WORKGROUP"],
+                        "--query-execution-context", f"Database={os.environ['DATABASE']}",
+                        "--query-string", stmt)["QueryExecutionId"]
+              while True:
+                  ex = aws("athena", "get-query-execution", "--query-execution-id", qid)["QueryExecution"]
+                  st = ex["Status"]["State"]
+                  if st in ("SUCCEEDED", "FAILED", "CANCELLED"):
+                      break
+                  time.sleep(2)
+              print(f"\n=== {stmt}\n{st}, scanned {ex['Statistics'].get('DataScannedInBytes', 0)/1e9:.2f} GB")
+              if st != "SUCCEEDED":
+                  print(ex["Status"].get("StateChangeReason")); continue
+              rows = aws("athena", "get-query-results", "--query-execution-id", qid, "--max-items", "500")["ResultSet"]["Rows"]
+              for r in rows:
+                  print(" | ".join(c.get("VarCharValue", "") for c in r["Data"]))
+          PY
