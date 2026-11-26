@@ -47,3 +47,9 @@ variable "enable_redshift" {
   type        = bool
   default     = false
 }
+
+variable "redshift_monthly_rpu_hours_cap" {
+  description = "Hard monthly cap on Redshift Serverless compute. At 8 RPU and about $0.375 per RPU-hour, 32 RPU-hours is about $12; the workgroup is deactivated when it is hit."
+  type        = number
+  default     = 32
+}

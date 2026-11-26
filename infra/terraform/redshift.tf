@@ -31,7 +31,7 @@ resource "aws_redshiftserverless_usage_limit" "rpu" {
   count         = var.enable_redshift ? 1 : 0
   resource_arn  = aws_redshiftserverless_workgroup.this[0].arn
   usage_type    = "serverless-compute"
-  amount        = 200
+  amount        = var.redshift_monthly_rpu_hours_cap
   period        = "monthly"
   breach_action = "deactivate"
 }
