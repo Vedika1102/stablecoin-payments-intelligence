@@ -110,6 +110,13 @@ data "aws_iam_policy_document" "sfn" {
     }
   }
   statement {
+    sid = "VendedLogDelivery" # required for the state machine's CloudWatch Logs destination
+    actions = ["logs:CreateLogDelivery", "logs:GetLogDelivery", "logs:UpdateLogDelivery", "logs:DeleteLogDelivery",
+      "logs:ListLogDeliveries", "logs:PutResourcePolicy", "logs:DescribeResourcePolicies",
+    "logs:DescribeLogGroups"]
+    resources = ["*"]
+  }
+  statement {
     actions   = ["sns:Publish"]
     resources = [aws_sns_topic.alerts.arn]
   }
