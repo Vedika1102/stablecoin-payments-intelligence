@@ -1,0 +1,35 @@
+name: stablecoin_payments
+version: "1.0.0"
+config-version: 2
+profile: stablecoin_payments
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+target-path: "target"
+clean-targets: ["target", "dbt_packages"]
+
+vars:
+  window_start: "2023-07-01"
+  window_end: "2025-06-30"
+  # wallets first seen before this date are treated as pre-existing (6-month lookback from window_start)
+  cohort_start: "2024-01-01"
+
+seeds:
+  stablecoin_payments:
+    +schema: core
+    dim_token_seed:
+      +column_types: {decimals: integer}
+
+models:
+  stablecoin_payments:
+    staging:
+      +materialized: view
+      +schema: staging
+    core:
+      +materialized: table
+      +schema: core
+    marts:
+      +materialized: table
+      +schema: marts

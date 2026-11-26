@@ -1,0 +1,8 @@
+ticket_bucket,label,lower_usd,upper_usd,is_small_ticket,sort_order
+0_dust_<$0.01,Under 1 cent (spam),0,0.01,false,0
+a_<$10,1 cent to $10,0.01,10,true,1
+b_$10-100,$10 to $100,10,100,true,2
+c_$100-1K,$100 to $1K,100,1000,true,3
+d_$1K-10K,$1K to $10K,1000,10000,false,4
+e_$10K-100K,$10K to $100K,10000,100000,false,5
+f_$100K+,$100K and up,100000,,false,6

@@ -1,0 +1,29 @@
+version: 2
+
+sources:
+  - name: lake
+    description: >
+      Gold and silver Parquet produced by the PySpark jobs. In prod these are Redshift Spectrum
+      external tables over s3://<lake>/ registered in the Glue Data Catalog (schema `lake`); the
+      large tables are COPY'd into Redshift by core.sp_load_from_lake(). In dev/CI, dbt-duckdb reads
+      the same Parquet directly.
+    schema: lake
+    tables:
+      - name: daily_kpis
+        meta: {external_location: "read_parquet('../data/lake/gold/daily_kpis/*.parquet')"}
+      - name: hourly_activity
+        meta: {external_location: "read_parquet('../data/lake/gold/hourly_activity/*.parquet')"}
+      - name: hourly_network
+        meta: {external_location: "read_parquet('../data/lake/gold/hourly_network/*.parquet')"}
+      - name: wallet_daily
+        meta: {external_location: "read_parquet('../data/lake/gold/wallet_daily/**/*.parquet', hive_partitioning = true)"}
+      - name: wallet_monthly
+        meta: {external_location: "read_parquet('../data/lake/gold/wallet_monthly/*.parquet')"}
+      - name: wallet_profile
+        meta: {external_location: "read_parquet('../data/lake/gold/wallet_profile/*.parquet')"}
+      - name: stablecoin_transfers
+        description: Transfer-level detail (~300M rows). Queried in place (Spectrum in prod), never copied.
+        meta: {external_location: "read_parquet('../data/lake/silver/stablecoin_transfers/**/*.parquet', hive_partitioning = true)"}
+      - name: dq_results
+        identifier: dq_results
+        meta: {external_location: "read_parquet('../data/lake/_dq_results/**/*.parquet', hive_partitioning = true, union_by_name = true)"}

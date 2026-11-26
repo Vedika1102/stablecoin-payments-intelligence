@@ -1,0 +1,102 @@
+{
+  "Comment": "Daily stablecoin payments pipeline. Default run processes yesterday (UTC); pass {\"run_date\": \"YYYY-MM-DD\"} to backfill a day. Glue bronze -> silver -> gold, Glue Data Quality, Redshift load, alert on failure.",
+  "StartAt": "BackfillOrDaily",
+  "States": {
+    "BackfillOrDaily": {
+      "Type": "Choice",
+      "Choices": [{ "Variable": "$.run_date", "IsPresent": true, "Next": "BackfillArgs" }],
+      "Default": "DailyArgs"
+    },
+    "BackfillArgs": {
+      "Type": "Pass",
+      "Parameters": {
+        "run_date.$": "$.run_date",
+        "job_args": { "--start.$": "$.run_date", "--end.$": "$.run_date" }
+      },
+      "Next": "IngestBronze"
+    },
+    "DailyArgs": {
+      "Type": "Pass",
+      "Comment": "Jobs default to yesterday UTC when no dates are passed.",
+      "Parameters": { "run_date": "yesterday", "job_args": {} },
+      "Next": "IngestBronze"
+    },
+    "IngestBronze": {
+      "Type": "Task",
+      "Comment": "Fails fast with SourceNotReady if the public partition has not been published yet; retried below.",
+      "Resource": "arn:aws:states:::glue:startJobRun.sync",
+      "Parameters": { "JobName": "${ingest_job}", "Arguments.$": "$.job_args" },
+      "ResultPath": null,
+      "Retry": [{ "ErrorEquals": ["States.TaskFailed"], "IntervalSeconds": 1800, "MaxAttempts": 6, "BackoffRate": 1 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.error", "Next": "NotifyFailure" }],
+      "Next": "BuildSilver"
+    },
+    "BuildSilver": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::glue:startJobRun.sync",
+      "Parameters": { "JobName": "${silver_job}", "Arguments.$": "$.job_args" },
+      "ResultPath": null,
+      "Retry": [{ "ErrorEquals": ["States.TaskFailed"], "IntervalSeconds": 300, "MaxAttempts": 1 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.error", "Next": "NotifyFailure" }],
+      "Next": "BuildGold"
+    },
+    "BuildGold": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::glue:startJobRun.sync",
+      "Parameters": { "JobName": "${gold_job}" },
+      "ResultPath": null,
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.error", "Next": "NotifyFailure" }],
+      "Next": "LoadRedshift"
+    },
+    "LoadRedshift": {
+      "Type": "Task",
+      "Comment": "COPY the refreshed gold partitions and rebuild marts (warehouse/redshift/05_load_procedures.sql).",
+      "Resource": "arn:aws:states:::aws-sdk:redshiftdata:executeStatement",
+      "Parameters": {
+        "WorkgroupName": "${workgroup}",
+        "Database": "${database}",
+        "Sql": "CALL core.sp_load_from_lake()"
+      },
+      "ResultSelector": { "id.$": "$.Id" },
+      "ResultPath": "$.load",
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.error", "Next": "NotifyFailure" }],
+      "Next": "WaitForLoad"
+    },
+    "WaitForLoad": { "Type": "Wait", "Seconds": 30, "Next": "LoadStatus" },
+    "LoadStatus": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:redshiftdata:describeStatement",
+      "Parameters": { "Id.$": "$.load.id" },
+      "ResultSelector": { "status.$": "$.Status" },
+      "ResultPath": "$.load_status",
+      "Next": "LoadDone?"
+    },
+    "LoadDone?": {
+      "Type": "Choice",
+      "Choices": [
+        { "Variable": "$.load_status.status", "StringEquals": "FINISHED", "Next": "Succeeded" },
+        { "Variable": "$.load_status.status", "StringEquals": "FAILED", "Next": "NotifyLoadFailure" },
+        { "Variable": "$.load_status.status", "StringEquals": "ABORTED", "Next": "NotifyLoadFailure" }
+      ],
+      "Default": "WaitForLoad"
+    },
+    "NotifyLoadFailure": {
+      "Type": "Pass",
+      "Parameters": { "Error": "RedshiftLoadFailed", "Cause.$": "$.load_status.status" },
+      "ResultPath": "$.error",
+      "Next": "NotifyFailure"
+    },
+    "NotifyFailure": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::sns:publish",
+      "Parameters": {
+        "TopicArn": "${alerts_topic}",
+        "Subject": "Stablecoin pipeline failed",
+        "Message.$": "States.Format('Run {} failed: {}', $.run_date, States.JsonToString($.error))"
+      },
+      "Next": "Failed"
+    },
+    "Failed": { "Type": "Fail" },
+    "Succeeded": { "Type": "Succeed" }
+  }
+}

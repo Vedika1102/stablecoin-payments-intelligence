@@ -1,0 +1,17 @@
+# Glue Data Quality (DQDL) rules for lake.stablecoin_transfers (silver).
+# Mirrors the in-job checks in lakehouse/dq.py so quality is visible in the Glue console too.
+Rules = [
+    RowCount > 100000,
+    IsComplete "transaction_hash",
+    IsComplete "from_address",
+    IsComplete "to_address",
+    IsComplete "amount_usd",
+    IsComplete "base_fee_gwei",
+    IsUnique "transaction_hash,log_index" ,
+    ColumnValues "token_symbol" in ["USDC", "USDT", "DAI", "PYUSD"],
+    ColumnValues "transfer_kind" in ["mint", "burn", "transfer"],
+    ColumnValues "amount_usd" >= 0,
+    ColumnValues "from_address" matches "^0x[0-9a-f]{40}$",
+    Completeness "eth_usd" >= 0.99,
+    ColumnValues "eth_usd" between 500 and 10000
+]

@@ -1,0 +1,9 @@
+line-length = 125
+target-version = "py311"
+[lint]
+select = ["E", "F", "W", "I"]
+ignore = ["E702"]
+
+[lint.per-file-ignores]
+# report templates are long f-strings; wrapping them hurts readability of the generated markdown
+"analysis/q*.py" = ["E501"]

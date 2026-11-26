@@ -1,0 +1,40 @@
+version: 2
+
+models:
+  - name: mart_payment_mix_daily
+    description: Daily stablecoin activity split into person-to-person small tickets, large tickets, contract flows and mint/burn.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [activity_date, token_symbol, flow_category]
+
+  - name: mart_fee_hourly_panel
+    description: Hourly network fee context joined to person-to-person transfer counts by ticket size.
+    columns:
+      - name: hour_ts
+        data_tests: [unique, not_null]
+    data_tests:
+      - expression_is_true:
+          arguments:
+            expression: "p2p_small_transfers + p2p_large_transfers <= p2p_transfers"
+
+  - name: mart_wallet_activation_funnel
+    data_tests:
+      - expression_is_true:
+          arguments:
+            expression: "new_wallets >= sent_within_30d and sent_within_30d >= sent_within_7d"
+
+  - name: mart_wallet_cohort_retention
+    columns:
+      - name: retention_rate
+        data_tests:
+          - accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 1
+
+  - name: mart_segment_mix_monthly
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [activity_month, segment]

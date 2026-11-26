@@ -1,0 +1,4 @@
+era,start_date,end_date,description
+pre_dencun,2023-04-12,2024-03-12,"After Shapella (withdrawals) and before Dencun. Rollups post data as expensive calldata."
+post_dencun,2024-03-13,2025-05-06,"Dencun / EIP-4844 blobs cut rollup data costs ~90%+; L2 fees collapse."
+post_pectra,2025-05-07,2099-12-31,"Pectra upgrade (EIP-7702 smart accounts, doubled blob capacity)."

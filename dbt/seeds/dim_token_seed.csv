@@ -1,0 +1,5 @@
+token_address,symbol,issuer,decimals,peg,launched_on_ethereum
+0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48,USDC,Circle,6,USD,2018-09-26
+0xdac17f958d2ee523a2206206994597c13d831ec7,USDT,Tether,6,USD,2017-11-28
+0x6b175474e89094c44da98b954eedeac495271d0f,DAI,MakerDAO (Sky),18,USD,2019-11-13
+0x6c3ea9036406852006290770bedfcaba0e23a0e8,PYUSD,Paxos for PayPal,6,USD,2023-08-07

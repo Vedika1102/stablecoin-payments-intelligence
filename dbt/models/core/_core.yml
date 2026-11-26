@@ -1,0 +1,109 @@
+version: 2
+
+models:
+  - name: dim_date
+    columns:
+      - name: date_day
+        data_tests: [unique, not_null]
+
+  - name: dim_token
+    columns:
+      - name: token_key
+        data_tests: [unique, not_null]
+      - name: token_symbol
+        data_tests:
+          - unique
+          - accepted_values:
+              arguments:
+                values: [USDC, USDT, DAI, PYUSD]
+
+  - name: dim_ticket_bucket
+    columns:
+      - name: ticket_bucket
+        data_tests: [unique, not_null]
+
+  - name: dim_wallet
+    description: >
+      SCD Type 2 on behavioural segment. One row per wallet per segment version.
+      Join facts with: fact_date between valid_from and valid_to.
+    data_tests:
+      - scd2_no_overlap:
+          arguments:
+            entity_column: wallet
+            valid_from_column: valid_from
+            valid_to_column: valid_to
+    columns:
+      - name: wallet_key
+        data_tests: [unique, not_null]
+      - name: wallet
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_wallet_profile')
+                field: wallet
+      - name: segment
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [high_throughput_service, receive_only, defi_contract_user, large_value_mover, payment_like, other]
+
+  - name: fct_wallet_monthly
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [wallet, activity_month]
+    columns:
+      - name: wallet_key
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_wallet')
+                field: wallet_key
+      - name: months_since_first_seen
+        data_tests:
+          - accepted_range:
+              arguments:
+                min_value: 0
+
+  - name: fct_transfers_daily
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [activity_date, token_symbol, ticket_bucket, transfer_kind, flow_type]
+    columns:
+      - name: token_key
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_token')
+                field: token_key
+      - name: transfers
+        data_tests:
+          - accepted_range:
+              arguments:
+                min_value: 1
+      - name: flow_category
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [mint_burn, dust_spam, p2p_small_ticket, p2p_large_ticket, contract_flow]
+
+  - name: fct_network_hourly
+    columns:
+      - name: hour_ts
+        data_tests: [unique, not_null]
+      - name: eth_usd
+        description: Derived on-chain from the Uniswap v3 USDC/WETH pool (hourly median swap price).
+        data_tests:
+          - not_null:
+              config:
+                severity: warn
+          - accepted_range:
+              arguments:
+                min_value: 500
+                max_value: 10000
+      - name: protocol_era
+        data_tests: [not_null]

@@ -1,0 +1,41 @@
+name: deploy
+
+# Ships code to AWS after merge: package the PySpark library for Glue, upload it, and apply
+# Terraform. Uses GitHub OIDC (no long-lived AWS keys) and a protected environment so a human
+# approves the apply.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: dev          # add required reviewers in repo settings
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: us-east-2
+      - uses: hashicorp/setup-terraform@v3
+        with: { terraform_version: "1.9.8" }
+      - name: Terraform apply
+        working-directory: infra/terraform
+        run: |
+          terraform init -input=false
+          terraform apply -auto-approve -input=false
+          echo "ARTIFACTS=$(terraform output -raw artifacts_bucket)" >> $GITHUB_ENV
+      - name: Package and upload Glue code
+        run: |
+          make package
+          aws s3 cp dist/lakehouse.zip s3://$ARTIFACTS/dist/lakehouse.zip
+          aws s3 cp dist/tokens.csv s3://$ARTIFACTS/dist/tokens.csv
+      - name: Deploy dbt project for the orchestrator
+        run: |
+          (cd dbt && zip -qr ../dist/dbt.zip . -x 'target/*' 'logs/*')
+          aws s3 cp dist/dbt.zip s3://$ARTIFACTS/dist/dbt.zip

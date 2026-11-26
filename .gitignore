@@ -1,0 +1,13 @@
+data/
+logs/
+warehouse/*.duckdb
+dbt/target/
+dbt/logs/
+dbt/dbt_packages/
+infra/terraform/.terraform/
+infra/terraform/*.tfstate*
+dist/
+__pycache__/
+.pytest_cache/
+*.pyc
+.env

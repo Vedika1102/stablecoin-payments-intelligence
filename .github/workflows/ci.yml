@@ -1,0 +1,83 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-and-unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11", cache: pip }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "17" }
+      - run: pip install -r requirements.txt
+      - name: Lint Python
+        run: ruff check .
+      - name: Unit tests (PySpark transforms + statistics)
+        run: pytest -q tests
+      - name: Redshift SQL parses
+        run: |
+          python - <<'PY'
+          import glob, sqlglot
+          for f in sorted(glob.glob("warehouse/redshift/*.sql")):
+              sqlglot.parse(open(f).read(), read="redshift"); print("ok", f)
+          PY
+      - name: Step Functions definition is valid JSON
+        run: python -c "import json; json.load(open('aws/stepfunctions/daily_pipeline.asl.json'))"
+      - name: Airflow DAG compiles
+        run: python -m py_compile orchestration/airflow/dags/stablecoin_daily.py
+
+  terraform:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with: { terraform_version: "1.9.8" }
+      - working-directory: infra/terraform
+        run: |
+          terraform init -backend=false -input=false
+          terraform fmt -check -recursive
+          terraform validate
+
+  smoke-pipeline:
+    # End-to-end on REAL data: two days read straight from the public AWS bucket (anonymous),
+    # through bronze -> silver -> gold -> dbt build (all models + tests) on DuckDB.
+    needs: lint-and-unit
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      SPARK_DRIVER_MEMORY: 5g
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11", cache: pip }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "17" }
+      - run: pip install -r requirements.txt && python scripts/install_s3a_jars.py
+      - name: Bronze (2 days)
+        run: python -m lakehouse.jobs.ingest_bronze --start 2024-03-12 --end 2024-03-13
+      - name: Contract registry (recent contracts only, smoke)
+        run: python -m lakehouse.jobs.build_contract_registry --since 2024-01-01 --end 2024-03-13 --min-rows 10000
+      - name: Silver + gold
+        run: |
+          python -m lakehouse.jobs.build_silver --start 2024-03-12 --end 2024-03-13
+          python -m lakehouse.jobs.build_gold
+      - name: dbt build (models + data tests)
+        working-directory: dbt
+        run: |
+          mkdir -p ../warehouse
+          dbt deps --profiles-dir . || true
+          dbt build --profiles-dir . --vars '{window_end: "2024-03-13"}'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dq-results
+          path: data/lake/_dq_results
