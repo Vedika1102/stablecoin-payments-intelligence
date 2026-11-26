@@ -16,11 +16,12 @@ FROM svv_table_info
 WHERE "schema" IN ('core', 'marts')
 ORDER BY size DESC;
 
--- Spectrum cost: bytes scanned from S3 per query in the last day (Spectrum bills per TB scanned)
-SELECT query, segment, s3_scanned_bytes / 1024 / 1024 AS mb_scanned, s3query_returned_rows, files
-FROM svl_s3query_summary
-WHERE starttime >= DATEADD(day, -1, GETDATE())
-ORDER BY s3_scanned_bytes DESC
+-- Spectrum usage in the last day: partitions pruned, files read (Serverless SYS_* view)
+SELECT query_id, source_type, total_partitions, qualified_partitions, scanned_files,
+       returned_rows, ROUND(returned_bytes / 1e6, 1) AS mb_returned, duration / 1000 AS ms
+FROM sys_external_query_detail
+WHERE start_time >= DATEADD(day, -1, GETDATE())
+ORDER BY returned_bytes DESC
 LIMIT 20;
 
 -- Slowest dashboard queries (Serverless)

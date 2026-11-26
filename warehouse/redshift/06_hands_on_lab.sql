@@ -23,10 +23,12 @@ WHERE block_date = '2024-03-13'
 GROUP BY 1
 ORDER BY 2 DESC;
 
--- How much did that scan cost? (Spectrum bills per TB scanned)
-SELECT query, ROUND(s3_scanned_bytes / 1e6, 1) AS mb_scanned, s3_scanned_rows, files
-FROM svl_s3query_summary
-ORDER BY starttime DESC
+-- How much did that scan touch? Partition pruning: qualified_partitions should be 1 of ~731.
+-- (Serverless uses the SYS_* monitoring views; the older SVL_*/STL_* views are provisioned-only.)
+SELECT query_id, source_type, total_partitions, qualified_partitions, scanned_files,
+       returned_rows, ROUND(returned_bytes / 1e6, 1) AS mb_returned, duration / 1000 AS ms
+FROM sys_external_query_detail
+ORDER BY start_time DESC
 LIMIT 5;
 
 -- -------------------------------------------------------------------------------------
