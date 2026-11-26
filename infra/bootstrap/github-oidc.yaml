@@ -9,6 +9,12 @@ Parameters:
     Type: String
     Default: Vedika1102/stablecoin-payments-intelligence
     Description: owner/name of the only repository allowed to assume the deploy role
+  GitHubSubjectPattern:
+    Type: String
+    Default: repo:Vedika1102@*/stablecoin-payments-intelligence@*:*
+    Description: >
+      Newer GitHub OIDC tokens put immutable owner and repo ids in the subject
+      (repo:OWNER@OWNER_ID/REPO@REPO_ID:ref:...). Both formats are accepted.
   CreateOidcProvider:
     Type: String
     AllowedValues: ["true", "false"]
@@ -43,7 +49,9 @@ Resources:
               StringEquals:
                 token.actions.githubusercontent.com:aud: sts.amazonaws.com
               StringLike:
-                token.actions.githubusercontent.com:sub: !Sub repo:${GitHubRepo}:*
+                token.actions.githubusercontent.com:sub:
+                  - !Sub repo:${GitHubRepo}:*
+                  - !Ref GitHubSubjectPattern
       # Terraform creates IAM roles, Glue, Redshift, Step Functions, etc. A personal sandbox uses
       # AdministratorAccess; in a company account this would be a scoped permission boundary.
       ManagedPolicyArns: [arn:aws:iam::aws:policy/AdministratorAccess]
