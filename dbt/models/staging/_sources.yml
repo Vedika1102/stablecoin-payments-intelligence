@@ -25,5 +25,5 @@ sources:
         description: Transfer-level detail (~300M rows). Queried in place (Spectrum in prod), never copied.
         meta: {external_location: "read_parquet('../data/lake/silver/stablecoin_transfers/**/*.parquet', hive_partitioning = true)"}
       - name: dq_results
-        identifier: dq_results
+        identifier: _dq_results   # Glue crawler names the table after the folder
         meta: {external_location: "read_parquet('../data/lake/_dq_results/**/*.parquet', hive_partitioning = true, union_by_name = true)"}
