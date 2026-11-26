@@ -21,7 +21,7 @@ jobs:
     if: ${{ vars.AWS_DEPLOY_ROLE_ARN != '' }}
     runs-on: ubuntu-latest
     env:
-      TF_VAR_enable_redshift: ${{ vars.ENABLE_REDSHIFT || 'false' }}
+      TF_VAR_enable_redshift: ${{ contains(vars.ENABLE_REDSHIFT, 'true') && 'true' || 'false' }}
       TF_VAR_alert_email: ${{ vars.ALERT_EMAIL }}
     steps:
       - uses: actions/checkout@v4

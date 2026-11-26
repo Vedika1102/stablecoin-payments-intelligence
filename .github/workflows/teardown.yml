@@ -28,7 +28,7 @@ jobs:
       - name: Terraform destroy
         working-directory: infra/terraform
         env:
-          TF_VAR_enable_redshift: ${{ vars.ENABLE_REDSHIFT || 'false' }}
+          TF_VAR_enable_redshift: ${{ contains(vars.ENABLE_REDSHIFT, 'true') && 'true' || 'false' }}
         run: |
           terraform init -input=false \
             -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" \
