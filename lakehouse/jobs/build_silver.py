@@ -122,6 +122,16 @@ def run_batch(spark, paths: Paths, days, tokens_df, registry) -> dict:
     return m
 
 
+def check_registry_fresh(registry, end: dt.date) -> None:
+    """Fail if the contract registry was built before the batch end. A stale registry silently labels
+    contracts created after it as wallets and inflates every wallet metric (this happened once on AWS:
+    a registry built to 2024-03-31 overstated wallet-days by about 2% from April 2024 on)."""
+    latest = registry.agg(F.max("created_at")).first()[0]
+    if latest is None or latest.date() < end:
+        raise RuntimeError(f"RegistryStale: contract registry ends {latest}, batch ends {end}. "
+                           f"Rebuild it with build_contract_registry --end {end} first.")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     yesterday = (dt.datetime.now(dt.timezone.utc).date() - dt.timedelta(days=1)).isoformat()
@@ -134,6 +144,7 @@ def main() -> None:
         "token_address", "symbol", F.col("decimals").cast("int").alias("decimals"))
     registry = spark.read.parquet(f"{paths.silver}/contract_registry")
     start, end = dt.date.fromisoformat(args.start), dt.date.fromisoformat(args.end)
+    check_registry_fresh(registry, end)
     metrics = [run_batch(spark, paths, days, tokens_df, registry) for days in month_batches(start, end)]
     (spark.createDataFrame(metrics).withColumn("run_ts", F.current_timestamp())
      .write.mode("append").parquet(f"{paths.lake}/_job_metrics/build_silver"))

@@ -25,7 +25,8 @@ FIRST_DAY = dt.date(2015, 7, 30)
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--end", required=True)
+    yesterday = (dt.datetime.now(dt.timezone.utc).date() - dt.timedelta(days=1)).isoformat()
+    ap.add_argument("--end", default=yesterday, help="default: yesterday UTC (daily scheduled run)")
     ap.add_argument("--since", default=FIRST_DAY.isoformat(),
                     help="CI smoke runs use a recent start date; production uses full history")
     ap.add_argument("--min-rows", type=int, default=1_000_000)

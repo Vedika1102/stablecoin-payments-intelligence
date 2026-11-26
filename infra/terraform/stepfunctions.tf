@@ -6,6 +6,7 @@ resource "aws_cloudwatch_log_group" "sfn" {
 # Without Redshift the load states are unreachable, which Step Functions rejects, so drop them.
 locals {
   sfn_rendered = jsondecode(templatefile("${path.module}/../../aws/stepfunctions/daily_pipeline.asl.json", {
+    registry_job = aws_glue_job.pipeline["build_contract_registry"].name
     ingest_job   = aws_glue_job.pipeline["ingest_bronze"].name
     silver_job   = aws_glue_job.pipeline["build_silver"].name
     gold_job     = aws_glue_job.pipeline["build_gold"].name

@@ -13,12 +13,22 @@
         "run_date.$": "$.run_date",
         "job_args": { "--start.$": "$.run_date", "--end.$": "$.run_date" }
       },
-      "Next": "IngestBronze"
+      "Next": "RefreshRegistry"
     },
     "DailyArgs": {
       "Type": "Pass",
       "Comment": "Jobs default to yesterday UTC when no dates are passed.",
       "Parameters": { "run_date": "yesterday", "job_args": {} },
+      "Next": "RefreshRegistry"
+    },
+    "RefreshRegistry": {
+      "Type": "Task",
+      "Comment": "Contracts created up to the run date, so new contracts are not counted as wallets. Silver refuses a stale registry.",
+      "Resource": "arn:aws:states:::glue:startJobRun.sync",
+      "Parameters": { "JobName": "${registry_job}", "Arguments.$": "$.job_args" },
+      "ResultPath": null,
+      "Retry": [{ "ErrorEquals": ["States.TaskFailed"], "IntervalSeconds": 300, "MaxAttempts": 1 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.error", "Next": "NotifyFailure" }],
       "Next": "IngestBronze"
     },
     "IngestBronze": {

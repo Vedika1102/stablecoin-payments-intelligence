@@ -8,7 +8,7 @@ on:
     inputs:
       start: { description: "First day (UTC)", default: "2023-07-01", required: true }
       end:   { description: "Last day (UTC)",  default: "2025-06-30", required: true }
-      skip_registry: { description: "Skip the contract registry (already built)", type: boolean, default: false }
+      skip_registry: { description: "Skip the contract registry (only if it already covers the end date; silver checks)", type: boolean, default: false }
 
 permissions:
   id-token: write
