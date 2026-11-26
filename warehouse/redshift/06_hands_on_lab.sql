@@ -95,12 +95,18 @@ ORDER BY 3 DESC;
 SELECT COUNT(*) FROM core.fct_wallet_daily WHERE activity_date BETWEEN '2024-03-01' AND '2024-03-31';
 SELECT COUNT(*) FROM core.fct_wallet_daily WHERE max_sent_usd BETWEEN 1000 AND 2000;
 
--- Compare blocks read: the sorted filter skips most blocks
-SELECT query_id, LEFT(query_text, 80) AS sql, elapsed_time / 1000 AS ms
-FROM sys_query_history
-WHERE query_text ILIKE 'SELECT COUNT(*) FROM core.fct_wallet_daily WHERE%'
-ORDER BY start_time DESC
-LIMIT 2;
+-- Compare blocks read: the sorted filter skips most blocks.
+-- Query Editor v2 prefixes each statement with a /* id */ comment, so match with a leading %.
+-- Turn the result cache off first (SET enable_result_cache_for_session TO off) so reruns really scan.
+SELECT h.query_id, LEFT(h.query_text, 90) AS sql, SUM(d.blocks_read) AS blocks_read,
+       MAX(h.elapsed_time) / 1000 AS ms
+FROM sys_query_history h
+JOIN sys_query_detail d ON d.query_id = h.query_id
+WHERE h.query_text ILIKE '%count(*) from core.fct_wallet_daily where%'
+  AND h.query_text NOT ILIKE '%sys_query%'
+GROUP BY 1, 2
+ORDER BY 1 DESC
+LIMIT 4;
 
 -- -------------------------------------------------------------------------------------
 -- Lab 5. Table health and skew
