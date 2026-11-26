@@ -27,6 +27,7 @@ models:
     staging:
       +materialized: view
       +schema: staging
+      +bind: false   # Redshift: late-binding views, required for views over Spectrum tables
     core:
       +materialized: table
       +schema: core

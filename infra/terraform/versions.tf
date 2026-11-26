@@ -6,14 +6,9 @@ terraform {
       version = "~> 5.70"
     }
   }
-  # Remote state for a team setup (bucket + lock table created once, out of band):
-  # backend "s3" {
-  #   bucket         = "<org>-terraform-state"
-  #   key            = "stablecoin-payments/terraform.tfstate"
-  #   region         = "us-east-2"
-  #   dynamodb_table = "terraform-locks"
-  #   encrypt        = true
-  # }
+  # Remote state. Bucket and lock table come from infra/bootstrap/github-oidc.yaml; the deploy
+  # workflow passes bucket, key, region and table with -backend-config.
+  backend "s3" {}
 }
 
 provider "aws" {

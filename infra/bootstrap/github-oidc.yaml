@@ -1,0 +1,78 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  One-time bootstrap for stablecoin-payments-intelligence. Lets GitHub Actions in ONE repository
+  deploy to this account through OIDC (no long-lived AWS keys), and creates the Terraform state
+  bucket and lock table. Create it once in the console (CloudFormation > Create stack > Upload).
+
+Parameters:
+  GitHubRepo:
+    Type: String
+    Default: Vedika1102/stablecoin-payments-intelligence
+    Description: owner/name of the only repository allowed to assume the deploy role
+  CreateOidcProvider:
+    Type: String
+    AllowedValues: ["true", "false"]
+    Default: "true"
+    Description: Set to false if this account already has the token.actions.githubusercontent.com provider
+
+Conditions:
+  MakeProvider: !Equals [!Ref CreateOidcProvider, "true"]
+
+Resources:
+  GitHubOidcProvider:
+    Type: AWS::IAM::OIDCProvider
+    Condition: MakeProvider
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList: [sts.amazonaws.com]
+      ThumbprintList: [6938fd4d98bab03faadb97b34396831e3780aea1]
+
+  DeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: stablecoin-payments-github-deploy
+      MaxSessionDuration: 14400
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Sub arn:aws:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+              StringLike:
+                token.actions.githubusercontent.com:sub: !Sub repo:${GitHubRepo}:*
+      # Terraform creates IAM roles, Glue, Redshift, Step Functions, etc. A personal sandbox uses
+      # AdministratorAccess; in a company account this would be a scoped permission boundary.
+      ManagedPolicyArns: [arn:aws:iam::aws:policy/AdministratorAccess]
+
+  StateBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    Properties:
+      BucketName: !Sub stablecoin-payments-tfstate-${AWS::AccountId}
+      VersioningConfiguration: { Status: Enabled }
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault: { SSEAlgorithm: AES256 }
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  LockTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: stablecoin-payments-tf-locks
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions: [{ AttributeName: LockID, AttributeType: S }]
+      KeySchema: [{ AttributeName: LockID, KeyType: HASH }]
+
+Outputs:
+  DeployRoleArn:
+    Value: !GetAtt DeployRole.Arn
+  StateBucket:
+    Value: !Ref StateBucket

@@ -1,23 +1,28 @@
 name: deploy
 
-# Ships code to AWS after merge: package the PySpark library for Glue, upload it, and apply
-# Terraform. Uses GitHub OIDC (no long-lived AWS keys) and a protected environment so a human
-# approves the apply.
+# Ships infrastructure and code to AWS: Terraform apply, then package the PySpark library for Glue.
+# Auth is GitHub OIDC into the role from infra/bootstrap/github-oidc.yaml (no long-lived keys).
+# Repository variables: AWS_DEPLOY_ROLE_ARN, TF_STATE_BUCKET, ENABLE_REDSHIFT (true/false), ALERT_EMAIL.
 on:
   push:
     branches: [main]
+    paths: ["infra/terraform/**", "lakehouse/**", "aws/**", "config/**", ".github/workflows/deploy.yml"]
   workflow_dispatch:
 
 permissions:
   id-token: write
   contents: read
 
+concurrency: { group: aws-dev, cancel-in-progress: false }
+
 jobs:
   deploy:
-    # Skipped until an AWS account is wired up (set the AWS_DEPLOY_ROLE_ARN repository variable).
+    # Skipped until an AWS account is wired up.
     if: ${{ vars.AWS_DEPLOY_ROLE_ARN != '' }}
     runs-on: ubuntu-latest
-    environment: dev          # add required reviewers in repo settings
+    env:
+      TF_VAR_enable_redshift: ${{ vars.ENABLE_REDSHIFT || 'false' }}
+      TF_VAR_alert_email: ${{ vars.ALERT_EMAIL }}
     steps:
       - uses: actions/checkout@v4
       - uses: aws-actions/configure-aws-credentials@v4
@@ -25,19 +30,20 @@ jobs:
           role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
           aws-region: us-east-2
       - uses: hashicorp/setup-terraform@v3
-        with: { terraform_version: "1.9.8" }
+        with: { terraform_version: "1.9.8", terraform_wrapper: false }
       - name: Terraform apply
         working-directory: infra/terraform
         run: |
-          terraform init -input=false
+          terraform init -input=false \
+            -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" \
+            -backend-config="key=stablecoin-payments/dev.tfstate" \
+            -backend-config="region=us-east-2" \
+            -backend-config="dynamodb_table=stablecoin-payments-tf-locks"
           terraform apply -auto-approve -input=false
           echo "ARTIFACTS=$(terraform output -raw artifacts_bucket)" >> $GITHUB_ENV
+          terraform output
       - name: Package and upload Glue code
         run: |
           make package
           aws s3 cp dist/lakehouse.zip s3://$ARTIFACTS/dist/lakehouse.zip
           aws s3 cp dist/tokens.csv s3://$ARTIFACTS/dist/tokens.csv
-      - name: Deploy dbt project for the orchestrator
-        run: |
-          (cd dbt && zip -qr ../dist/dbt.zip . -x 'target/*' 'logs/*')
-          aws s3 cp dist/dbt.zip s3://$ARTIFACTS/dist/dbt.zip

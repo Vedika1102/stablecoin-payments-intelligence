@@ -55,7 +55,7 @@
       "Parameters": {
         "WorkgroupName": "${workgroup}",
         "Database": "${database}",
-        "Sql": "CALL core.sp_load_from_lake()"
+        "Sql": "CALL core.sp_load_from_lake('s3://${lake_bucket}', NULL)"
       },
       "ResultSelector": { "id.$": "$.Id" },
       "ResultPath": "$.load",

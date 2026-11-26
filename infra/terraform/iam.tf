@@ -61,8 +61,9 @@ resource "aws_iam_role" "redshift" {
 
 data "aws_iam_policy_document" "redshift_data" {
   statement {
-    actions   = ["s3:GetObject", "s3:ListBucket"]
-    resources = [aws_s3_bucket.lake.arn, "${aws_s3_bucket.lake.arn}/*"]
+    actions = ["s3:GetObject", "s3:ListBucket"]
+    resources = [aws_s3_bucket.lake.arn, "${aws_s3_bucket.lake.arn}/*",
+    "arn:aws:s3:::aws-public-blockchain", "arn:aws:s3:::aws-public-blockchain/*"]
   }
   statement {
     actions = ["glue:GetDatabase", "glue:GetDatabases", "glue:GetTable", "glue:GetTables",

@@ -5,3 +5,6 @@ output "redshift_workgroup" { value = one(aws_redshiftserverless_workgroup.this[
 output "redshift_spectrum_role_arn" { value = aws_iam_role.redshift.arn }
 output "state_machine_arn" { value = aws_sfn_state_machine.daily.arn }
 output "glue_catalog_lake_db" { value = aws_glue_catalog_database.lake.name }
+output "redshift_host" { value = one(aws_redshiftserverless_workgroup.this[*].endpoint[0].address) }
+output "redshift_security_group_id" { value = one(aws_security_group.redshift[*].id) }
+output "redshift_admin_secret_arn" { value = one(aws_redshiftserverless_namespace.this[*].admin_password_secret_arn) }

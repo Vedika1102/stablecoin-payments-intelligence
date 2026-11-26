@@ -14,6 +14,7 @@ resource "aws_sfn_state_machine" "daily" {
     database     = var.enable_redshift ? aws_redshiftserverless_namespace.this[0].db_name : "disabled"
     after_gold   = var.enable_redshift ? "LoadRedshift" : "Succeeded"
     alerts_topic = aws_sns_topic.alerts.arn
+    lake_bucket  = aws_s3_bucket.lake.bucket
   })
   logging_configuration {
     log_destination        = "${aws_cloudwatch_log_group.sfn.arn}:*"

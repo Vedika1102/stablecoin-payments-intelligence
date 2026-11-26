@@ -9,14 +9,16 @@ stablecoin_payments:
       settings:
         memory_limit: "8GB"
     prod:
+      # Redshift Serverless. The warehouse workflow reads the admin secret from Secrets Manager
+      # and exports these variables; nothing is stored in the repo.
       type: redshift
-      method: iam
-      cluster_id: "{{ env_var('REDSHIFT_WORKGROUP', 'stablecoin-payments-dev') }}"
+      method: database
       host: "{{ env_var('REDSHIFT_HOST', 'not-set') }}"
       port: 5439
       dbname: analytics
       schema: analytics
-      user: "{{ env_var('REDSHIFT_USER', 'dbt') }}"
-      region: us-east-2
-      threads: 8
+      user: "{{ env_var('REDSHIFT_USER', 'admin') }}"
+      password: "{{ env_var('REDSHIFT_PASSWORD', '') }}"
+      threads: 4
       sslmode: require
+      connect_timeout: 30

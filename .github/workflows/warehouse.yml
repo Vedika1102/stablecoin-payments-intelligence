@@ -1,0 +1,71 @@
+name: warehouse
+
+# Builds the Redshift warehouse from the lake: Spectrum external schemas, then dbt (seeds, staging
+# views over Spectrum, core star schema incl. SCD2 dim_wallet, marts) with all tests, on Redshift.
+# The runner's IP is allowed into the Redshift security group for this run only.
+on:
+  workflow_dispatch:
+    inputs:
+      dbt_args: { description: "Extra dbt build args (e.g. --select marts)", default: "", required: false }
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency: { group: aws-dev, cancel-in-progress: false }
+
+jobs:
+  dbt-redshift:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: us-east-2
+      - uses: hashicorp/setup-terraform@v3
+        with: { terraform_version: "1.9.8", terraform_wrapper: false }
+      - name: Read Terraform outputs
+        working-directory: infra/terraform
+        run: |
+          terraform init -input=false \
+            -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" \
+            -backend-config="key=stablecoin-payments/dev.tfstate" \
+            -backend-config="region=us-east-2" \
+            -backend-config="dynamodb_table=stablecoin-payments-tf-locks" > /dev/null
+          host=$(terraform output -raw redshift_host)
+          [ -n "$host" ] && [ "$host" != "null" ] || { echo "Redshift is not enabled (set ENABLE_REDSHIFT=true and run deploy)"; exit 1; }
+          echo "REDSHIFT_HOST=$host" >> $GITHUB_ENV
+          echo "SG_ID=$(terraform output -raw redshift_security_group_id)" >> $GITHUB_ENV
+          echo "SECRET_ARN=$(terraform output -raw redshift_admin_secret_arn)" >> $GITHUB_ENV
+      - name: Credentials and network access for this run
+        run: |
+          secret=$(aws secretsmanager get-secret-value --secret-id "$SECRET_ARN" --query SecretString --output text)
+          pw=$(echo "$secret" | jq -r .password); echo "::add-mask::$pw"
+          echo "REDSHIFT_USER=$(echo "$secret" | jq -r .username)" >> $GITHUB_ENV
+          echo "REDSHIFT_PASSWORD=$pw" >> $GITHUB_ENV
+          ip=$(curl -s https://checkip.amazonaws.com)
+          echo "RUNNER_CIDR=$ip/32" >> $GITHUB_ENV
+          aws ec2 authorize-security-group-ingress --group-id "$SG_ID" --protocol tcp --port 5439 --cidr "$ip/32"
+      - name: Spectrum external schemas
+        env: { PGPASSWORD: "${{ env.REDSHIFT_PASSWORD }}" }
+        run: |
+          for i in 1 2 3 4 5 6; do pg_isready -h "$REDSHIFT_HOST" -p 5439 && break; sleep 10; done
+          psql "host=$REDSHIFT_HOST port=5439 dbname=analytics user=$REDSHIFT_USER sslmode=require" \
+               -v ON_ERROR_STOP=1 -f warehouse/redshift/01_external_schemas.sql
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - name: dbt build on Redshift
+        working-directory: dbt
+        run: |
+          pip install -q "dbt-core>=1.9,<2" "dbt-redshift>=1.9,<2"
+          dbt build --profiles-dir . --target prod ${{ inputs.dbt_args }}
+      - name: Upload dbt run results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with: { name: dbt-target, path: "dbt/target/run_results.json" }
+      - name: Close network access
+        if: always()
+        run: |
+          [ -n "${RUNNER_CIDR:-}" ] && aws ec2 revoke-security-group-ingress --group-id "$SG_ID" --protocol tcp --port 5439 --cidr "$RUNNER_CIDR" || true

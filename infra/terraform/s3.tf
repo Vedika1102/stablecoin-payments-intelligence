@@ -6,7 +6,8 @@ data "aws_caller_identity" "current" {}
 
 # One bucket for the lake (bronze/silver/gold/_dq_results), one for code + Athena results.
 resource "aws_s3_bucket" "lake" {
-  bucket = "${local.prefix}-lake-${data.aws_caller_identity.current.account_id}"
+  bucket        = "${local.prefix}-lake-${data.aws_caller_identity.current.account_id}"
+  force_destroy = true # dev sandbox: teardown removes data too (it is rebuildable from the public source)
 }
 
 resource "aws_s3_bucket" "artifacts" {

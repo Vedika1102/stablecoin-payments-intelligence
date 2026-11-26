@@ -22,6 +22,7 @@ from airflow.providers.amazon.aws.sensors.s3 import S3KeySensor
 
 ENV = "dev"
 PREFIX = f"stablecoin-payments-{ENV}"
+LAKE_BUCKET = "{{ var.value.lake_bucket }}"  # Airflow Variable set from the Terraform output lake_bucket
 DS = "{{ ds }}"  # logical date = the day being processed
 
 default_args = {
@@ -77,7 +78,7 @@ with DAG(
         task_id="load_redshift",
         workgroup_name=PREFIX,
         database="analytics",
-        sql="CALL core.sp_load_from_lake();",
+        sql="CALL core.sp_load_from_lake('s3://" + LAKE_BUCKET + "', NULL);",
         wait_for_completion=True,
     )
 

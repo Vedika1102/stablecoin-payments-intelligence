@@ -1,0 +1,38 @@
+name: teardown
+
+# Deletes everything Terraform created (lake bucket, Glue, Redshift, Step Functions...).
+# To drop only Redshift, set the ENABLE_REDSHIFT variable to false and re-run deploy instead.
+on:
+  workflow_dispatch:
+    inputs:
+      confirm: { description: "Type DESTROY to delete all project resources", required: true }
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency: { group: aws-dev, cancel-in-progress: false }
+
+jobs:
+  destroy:
+    if: ${{ inputs.confirm == 'DESTROY' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: us-east-2
+      - uses: hashicorp/setup-terraform@v3
+        with: { terraform_version: "1.9.8", terraform_wrapper: false }
+      - name: Terraform destroy
+        working-directory: infra/terraform
+        env:
+          TF_VAR_enable_redshift: ${{ vars.ENABLE_REDSHIFT || 'false' }}
+        run: |
+          terraform init -input=false \
+            -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" \
+            -backend-config="key=stablecoin-payments/dev.tfstate" \
+            -backend-config="region=us-east-2" \
+            -backend-config="dynamodb_table=stablecoin-payments-tf-locks"
+          terraform destroy -auto-approve -input=false

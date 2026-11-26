@@ -1,0 +1,58 @@
+name: run-pipeline
+
+# Backfill on AWS Glue: contract registry -> bronze -> silver -> gold for a date range, then the
+# crawler so Athena and Redshift Spectrum see the new tables. The daily schedule is Step Functions;
+# this is the manual, any-range version.
+on:
+  workflow_dispatch:
+    inputs:
+      start: { description: "First day (UTC)", default: "2023-07-01", required: true }
+      end:   { description: "Last day (UTC)",  default: "2025-06-30", required: true }
+      skip_registry: { description: "Skip the contract registry (already built)", type: boolean, default: false }
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency: { group: aws-dev, cancel-in-progress: false }
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      PREFIX: stablecoin-payments-dev
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: us-east-2
+          role-duration-seconds: 14400
+      - name: Run Glue jobs in order
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_job () {   # name, json args
+            id=$(aws glue start-job-run --job-name "$PREFIX-$1" --arguments "$2" --query JobRunId --output text)
+            echo "::group::$1 ($id)"
+            while true; do
+              st=$(aws glue get-job-run --job-name "$PREFIX-$1" --run-id "$id" --query JobRun.JobRunState --output text)
+              case "$st" in
+                SUCCEEDED) aws glue get-job-run --job-name "$PREFIX-$1" --run-id "$id" \
+                             --query 'JobRun.{seconds:ExecutionTime,dpu_seconds:DPUSeconds}' ; echo "::endgroup::"; return 0 ;;
+                FAILED|ERROR|TIMEOUT|STOPPED) aws glue get-job-run --job-name "$PREFIX-$1" --run-id "$id" \
+                             --query JobRun.ErrorMessage; echo "::endgroup::"; return 1 ;;
+              esac
+              sleep 30
+            done
+          }
+          S='${{ inputs.start }}'; E='${{ inputs.end }}'
+          if [ '${{ inputs.skip_registry }}' != 'true' ]; then run_job build_contract_registry "{\"--end\":\"$E\"}"; fi
+          run_job ingest_bronze "{\"--start\":\"$S\",\"--end\":\"$E\"}"
+          run_job build_silver  "{\"--start\":\"$S\",\"--end\":\"$E\"}"
+          run_job build_gold    "{}"
+      - name: Refresh the Glue catalog
+        run: |
+          aws glue start-crawler --name "$PREFIX-lake"
+          until [ "$(aws glue get-crawler --name "$PREFIX-lake" --query Crawler.State --output text)" = "READY" ]; do sleep 20; done
+          aws glue get-tables --database-name stablecoin_payments_dev_lake --query 'TableList[].Name'
