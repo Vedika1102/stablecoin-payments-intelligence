@@ -625,9 +625,19 @@ def build_dashboards(root):
 def windows(root, sheet_names, dashboard_names):
     w = sub(root, "windows", source_height="30")
     for d in dashboard_names:
-        sub(w, "window", class_="dashboard", maximized="true", name=d)
+        win = sub(w, "window", class_="dashboard", maximized="true", name=d)
+        sub(win, "viewpoints")
+        sub(win, "active", id="-1")
     for s in sheet_names:
-        sub(w, "window", class_="worksheet", name=s)
+        win = sub(w, "window", class_="worksheet", name=s)
+        cards = sub(win, "cards")
+        left = sub(cards, "edge", name="left")
+        strip = sub(left, "strip", size="160")
+        for t in ("pages", "filters", "marks"):
+            sub(strip, "card", type=t)
+        top = sub(cards, "edge", name="top")
+        for t, size in (("columns", "2147483647"), ("rows", "2147483647"), ("title", "31")):
+            sub(sub(top, "strip", size=size), "card", type=t)
 
 
 def build() -> Path:
